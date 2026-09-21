@@ -1,11 +1,11 @@
 import { FormEvent, useState } from "react";
 import { useAuth } from "./context/AuthContext";
 import AuthModal from "./components/AuthModal";
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { addDoc, collection, getDocs, query, serverTimestamp, updateDoc, doc } from "firebase/firestore";
 import { db } from "./lib/firebase";
 import {
   ArrowRight, CalendarDays, ChevronDown, Coffee, Instagram, MapPin,
-  Menu as MenuIcon, ShoppingBag, Star, Utensils, X
+  Menu as MenuIcon, ShoppingBag, Star, Utensils, X, UserRound, CalendarCheck, LogOut, Loader2, Clock3, CircleCheck, CircleX
 } from "lucide-react";
 
 const menu = [
@@ -34,8 +34,67 @@ function App() {
   const [bookingSaving, setBookingSaving] = useState(false);
   const [bookingMessage, setBookingMessage] = useState("");
   const [bookingError, setBookingError] = useState("");
+  const [dashboardOpen, setDashboardOpen] = useState(false);
+  const [myBookings, setMyBookings] = useState<any[]>([]);
+  const [bookingsLoading, setBookingsLoading] = useState(false);
+  const [bookingActionId, setBookingActionId] = useState<string | null>(null);
+  const [dashboardError, setDashboardError] = useState("");
 
   const addToCart = () => setCart(v => v + 1);
+
+  const loadMyBookings = async () => {
+    if (!user) return;
+    setBookingsLoading(true);
+    setDashboardError("");
+    try {
+      const snapshot = await getDocs(
+        query(collection(db, "tableBookings"))
+      );
+      const bookings = snapshot.docs
+        .map(item => ({ id: item.id, ...item.data() }))
+        .filter((item: any) => item.userId === user.uid)
+        .sort((a: any, b: any) => {
+          const aTime = a.createdAt?.toMillis?.() || 0;
+          const bTime = b.createdAt?.toMillis?.() || 0;
+          return bTime - aTime;
+        });
+      setMyBookings(bookings);
+    } catch (error) {
+      console.error("Could not load bookings:", error);
+      setDashboardError("We couldn't load your bookings. Please try again.");
+    } finally {
+      setBookingsLoading(false);
+    }
+  };
+
+  const openDashboard = async () => {
+    if (!user) {
+      setAuthOpen(true);
+      return;
+    }
+    setDashboardOpen(true);
+    await loadMyBookings();
+  };
+
+  const cancelBooking = async (bookingId: string) => {
+    if (!user) return;
+    const confirmed = window.confirm("Cancel this reservation request?");
+    if (!confirmed) return;
+    setBookingActionId(bookingId);
+    setDashboardError("");
+    try {
+      await updateDoc(doc(db, "tableBookings", bookingId), {
+        status: "cancelled",
+        updatedAt: serverTimestamp(),
+      });
+      await loadMyBookings();
+    } catch (error) {
+      console.error("Could not cancel booking:", error);
+      setDashboardError("We couldn't cancel this booking. Please try again.");
+    } finally {
+      setBookingActionId(null);
+    }
+  };
 
   const submitBooking = async (event: FormEvent) => {
     event.preventDefault();
@@ -91,7 +150,7 @@ function App() {
             )}
             {!loading && user ? (
               <div className="flex items-center gap-3">
-                <button onClick={() => setAuthOpen(true)} className="flex items-center gap-2 rounded-full border border-black/10 bg-white px-4 py-2.5 text-sm font-semibold hover:border-forest">
+                <button onClick={openDashboard} className="flex items-center gap-2 rounded-full border border-black/10 bg-white px-4 py-2.5 text-sm font-semibold hover:border-forest">
                   <span className="grid h-7 w-7 place-items-center rounded-full bg-forest text-xs text-white">{(user.displayName || user.email || "U").charAt(0).toUpperCase()}</span>
                   <span className="max-w-28 truncate">{user.displayName || user.email}</span>
                 </button>
@@ -199,6 +258,91 @@ function App() {
       </footer>
 
       <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
+
+      {dashboardOpen && user && <div className="fixed inset-0 z-[65] overflow-y-auto bg-cream">
+        <div className="min-h-screen">
+          <header className="sticky top-0 z-10 border-b border-black/5 bg-cream/95 backdrop-blur">
+            <div className="container-page flex h-20 items-center justify-between">
+              <button onClick={() => setDashboardOpen(false)} className="flex items-center gap-3">
+                <span className="grid h-10 w-10 place-items-center rounded-full bg-forest text-cream"><Coffee size={20}/></span>
+                <span className="font-display text-2xl font-bold">Café Bistro</span>
+              </button>
+              <div className="flex items-center gap-3">
+                <span className="hidden text-sm text-ink/55 sm:block">{user.email}</span>
+                <button onClick={() => setDashboardOpen(false)} className="rounded-full border border-black/10 bg-white px-4 py-2 text-sm font-semibold hover:border-forest">Back to site</button>
+              </div>
+            </div>
+          </header>
+
+          <main className="container-page py-12">
+            <div className="grid gap-6 lg:grid-cols-[.8fr_1.2fr]">
+              <section className="rounded-[2rem] bg-forest p-8 text-white">
+                <div className="grid h-14 w-14 place-items-center rounded-full bg-white/10">
+                  {user.photoURL ? <img src={user.photoURL} alt="" className="h-14 w-14 rounded-full object-cover"/> : <UserRound size={26}/>}
+                </div>
+                <p className="mt-7 text-xs font-bold uppercase tracking-[.2em] text-sage">My account</p>
+                <h1 className="mt-2 font-display text-4xl">{user.displayName || "Welcome"}</h1>
+                <p className="mt-2 break-all text-white/60">{user.email}</p>
+                <div className="mt-8 border-t border-white/15 pt-6">
+                  <div className="flex items-center justify-between">
+                    <span className="text-white/60">Total reservations</span>
+                    <b className="text-2xl">{myBookings.length}</b>
+                  </div>
+                </div>
+                <button onClick={logout} className="mt-7 flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-forest hover:bg-sage"><LogOut size={16}/> Logout</button>
+              </section>
+
+              <section className="rounded-[2rem] border border-black/5 bg-white p-6 sm:p-8">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-[.2em] text-forest">My bookings</p>
+                    <h2 className="mt-2 font-display text-4xl">Table reservations.</h2>
+                  </div>
+                  <button onClick={loadMyBookings} disabled={bookingsLoading} className="rounded-full border border-black/10 px-4 py-2 text-sm font-semibold hover:border-forest disabled:opacity-50">
+                    {bookingsLoading ? "Refreshing..." : "Refresh"}
+                  </button>
+                </div>
+
+                {dashboardError && <div className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{dashboardError}</div>}
+
+                {bookingsLoading ? (
+                  <div className="grid min-h-64 place-items-center text-ink/45"><Loader2 className="animate-spin" size={28}/></div>
+                ) : myBookings.length === 0 ? (
+                  <div className="mt-8 rounded-3xl bg-cream p-8 text-center">
+                    <CalendarCheck className="mx-auto text-forest" size={38}/>
+                    <h3 className="mt-4 font-display text-2xl">No reservations yet.</h3>
+                    <p className="mt-2 text-sm text-ink/55">Your table reservations will appear here after you submit a request.</p>
+                    <button onClick={() => { setDashboardOpen(false); setBookingOpen(true); }} className="mt-5 rounded-full bg-forest px-5 py-3 text-sm font-semibold text-white">Book a table</button>
+                  </div>
+                ) : (
+                  <div className="mt-7 space-y-4">
+                    {myBookings.map((booking: any) => {
+                      const status = String(booking.status || "pending").toLowerCase();
+                      const cancelled = status === "cancelled";
+                      const confirmed = status === "confirmed";
+                      return <article key={booking.id} className="rounded-2xl border border-black/5 bg-cream p-5">
+                        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              {confirmed ? <CircleCheck className="text-green-700" size={19}/> : cancelled ? <CircleX className="text-red-600" size={19}/> : <Clock3 className="text-gold" size={19}/>}
+                              <span className="text-xs font-bold uppercase tracking-wider text-ink/45">Reservation</span>
+                            </div>
+                            <h3 className="mt-2 font-display text-2xl">{booking.date}</h3>
+                            <p className="mt-1 text-sm text-ink/60">{booking.guests} {Number(booking.guests) === 1 ? "guest" : "guests"} · {booking.phone}</p>
+                          </div>
+                          <span className={`rounded-full px-3 py-1.5 text-xs font-bold capitalize ${confirmed ? "bg-green-100 text-green-800" : cancelled ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"}`}>{status}</span>
+                        </div>
+                        {booking.specialRequest && <p className="mt-4 rounded-xl bg-white px-4 py-3 text-sm text-ink/60"><b>Request:</b> {booking.specialRequest}</p>}
+                        {!cancelled && <button onClick={() => cancelBooking(booking.id)} disabled={bookingActionId === booking.id} className="mt-4 rounded-full border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50">{bookingActionId === booking.id ? "Cancelling..." : "Cancel reservation"}</button>}
+                      </article>;
+                    })}
+                  </div>
+                )}
+              </section>
+            </div>
+          </main>
+        </div>
+      </div>
 
       {bookingOpen && <div className="fixed inset-0 z-[60] grid place-items-center bg-black/50 p-4" onClick={() => setBookingOpen(false)}>
         <div className="w-full max-w-lg rounded-3xl bg-cream p-7 shadow-2xl" onClick={e => e.stopPropagation()}>
