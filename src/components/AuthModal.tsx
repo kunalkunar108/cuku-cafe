@@ -22,7 +22,22 @@ function friendlyError(error: unknown) {
     "auth/popup-blocked": "Your browser blocked the Google sign-in popup. Allow popups and try again.",
     "auth/operation-not-allowed": "This sign-in method is not enabled in Firebase Authentication.",
   };
-  return messages[code] || "Something went wrong. Please try again.";
+  if (code === "auth/account-exists-with-different-credential") {
+    return "An account already exists with this email using a different sign-in method. Log in with email/password first, then use Google.";
+  }
+  if (code === "auth/unauthorized-domain") {
+    return "This website domain is not authorized in Firebase Authentication. Add the current website domain under Firebase → Authentication → Settings → Authorized domains.";
+  }
+  if (code === "auth/network-request-failed") {
+    return "Network request failed. Check your internet connection and try Google sign-in again.";
+  }
+  if (code === "auth/internal-error") {
+    return "Firebase returned an internal authentication error. Check the browser console for the exact Firebase error code.";
+  }
+  console.error("Firebase authentication error:", error);
+  return code
+    ? `Google sign-in failed (${code}). Check Firebase Authentication settings and the browser console for the full error.`
+    : "Something went wrong. Please try again.";
 }
 
 export default function AuthModal({ open, onClose }: AuthModalProps) {
