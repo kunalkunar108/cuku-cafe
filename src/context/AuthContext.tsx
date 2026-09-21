@@ -1,13 +1,13 @@
 import {
   GoogleAuthProvider, User, createUserWithEmailAndPassword, onAuthStateChanged,
-  signInWithEmailAndPassword, signInWithPopup, signOut, updateProfile,
+  signInWithEmailAndPassword, signInWithPopup, signOut, updateProfile, getIdTokenResult,
 } from "firebase/auth";
 import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from "react";
 import { auth, db } from "../lib/firebase";
 
 type AuthContextValue = {
-  user: User | null; loading: boolean;
+  user: User | null; loading: boolean; isAdmin: boolean; adminLoading: boolean;
   signUp: (name: string, email: string, password: string) => Promise<User>;
   signIn: (email: string, password: string) => Promise<User>;
   signInWithGoogle: () => Promise<User>; logout: () => Promise<void>;
@@ -24,10 +24,32 @@ async function createUserProfile(user: User, name?: string) {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  useEffect(() => onAuthStateChanged(auth, nextUser => { setUser(nextUser); setLoading(false); }), []);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminLoading, setAdminLoading] = useState(true);
+  useEffect(() => {
+    return onAuthStateChanged(auth, async nextUser => {
+      setUser(nextUser);
+      setLoading(false);
+      setAdminLoading(true);
+      if (!nextUser) {
+        setIsAdmin(false);
+        setAdminLoading(false);
+        return;
+      }
+      try {
+        const token = await getIdTokenResult(nextUser, true);
+        setIsAdmin(token.claims.admin === true);
+      } catch (error) {
+        console.error("Could not read Firebase admin claim:", error);
+        setIsAdmin(false);
+      } finally {
+        setAdminLoading(false);
+      }
+    });
+  }, []);
 
   const value = useMemo<AuthContextValue>(() => ({
-    user, loading,
+    user, loading, isAdmin, adminLoading,
     signUp: async (name, email, password) => {
       const credential = await createUserWithEmailAndPassword(auth, email, password);
       await updateProfile(credential.user, { displayName: name.trim() });
