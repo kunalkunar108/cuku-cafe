@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useAuth } from "./context/AuthContext";
+import AuthModal from "./components/AuthModal";
 import {
   ArrowRight, CalendarDays, ChevronDown, Coffee, Instagram, MapPin,
   Menu as MenuIcon, ShoppingBag, Star, Utensils, X
@@ -24,6 +26,8 @@ function App() {
   const [open, setOpen] = useState(false);
   const [cart, setCart] = useState(0);
   const [bookingOpen, setBookingOpen] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
+  const { user, loading, logout } = useAuth();
 
   const addToCart = () => setCart(v => v + 1);
 
@@ -39,6 +43,17 @@ function App() {
             {["Home","Menu","About","Gallery","Events","Contact"].map(x =>
               <a key={x} href={"#" + x.toLowerCase()} className="text-sm font-medium text-ink/70 transition hover:text-forest">{x}</a>
             )}
+            {!loading && user ? (
+              <div className="flex items-center gap-3">
+                <button onClick={() => setAuthOpen(true)} className="flex items-center gap-2 rounded-full border border-black/10 bg-white px-4 py-2.5 text-sm font-semibold hover:border-forest">
+                  <span className="grid h-7 w-7 place-items-center rounded-full bg-forest text-xs text-white">{(user.displayName || user.email || "U").charAt(0).toUpperCase()}</span>
+                  <span className="max-w-28 truncate">{user.displayName || user.email}</span>
+                </button>
+                <button onClick={logout} className="text-sm font-semibold text-ink/55 hover:text-forest">Logout</button>
+              </div>
+            ) : (
+              <button onClick={() => setAuthOpen(true)} className="rounded-full border border-forest/20 bg-white px-5 py-3 text-sm font-semibold text-forest transition hover:border-forest">Login</button>
+            )}
             <button onClick={() => setBookingOpen(true)} className="rounded-full bg-forest px-5 py-3 text-sm font-semibold text-white transition hover:bg-ink">Book a Table</button>
           </nav>
           <button className="relative md:hidden" onClick={() => setOpen(!open)} aria-label="Toggle menu">
@@ -46,7 +61,7 @@ function App() {
           </button>
           {cart > 0 && <span className="absolute right-16 top-7 grid h-5 min-w-5 place-items-center rounded-full bg-gold px-1 text-xs font-bold md:right-40">{cart}</span>}
         </div>
-        {open && <div className="border-t border-black/5 px-5 py-5 md:hidden">{["Home","Menu","About","Gallery","Events","Contact"].map(x => <a onClick={() => setOpen(false)} key={x} href={"#" + x.toLowerCase()} className="block py-3 text-lg">{x}</a>)}<button onClick={() => {setOpen(false);setBookingOpen(true)}} className="mt-3 w-full rounded-full bg-forest py-3 font-semibold text-white">Book a Table</button></div>}
+        {open && <div className="border-t border-black/5 px-5 py-5 md:hidden">{["Home","Menu","About","Gallery","Events","Contact"].map(x => <a onClick={() => setOpen(false)} key={x} href={"#" + x.toLowerCase()} className="block py-3 text-lg">{x}</a>)}<button onClick={() => {setOpen(false);setAuthOpen(true)}} className="mt-3 w-full rounded-full border border-forest/20 bg-white py-3 font-semibold text-forest">Login / Sign up</button><button onClick={() => {setOpen(false);setBookingOpen(true)}} className="mt-3 w-full rounded-full bg-forest py-3 font-semibold text-white">Book a Table</button></div>}
       </header>
 
       <main id="home">
@@ -137,6 +152,8 @@ function App() {
         <div className="container-page mt-12 border-t border-white/10 pt-6 text-xs text-white/35">© 2026 Café Bistro. Built for the next phase: Firebase, bookings, auth and admin.</div>
       </footer>
 
+      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
+
       {bookingOpen && <div className="fixed inset-0 z-[60] grid place-items-center bg-black/50 p-4" onClick={() => setBookingOpen(false)}>
         <div className="w-full max-w-lg rounded-3xl bg-cream p-7 shadow-2xl" onClick={e => e.stopPropagation()}>
           <div className="flex items-center justify-between"><h2 className="font-display text-3xl">Book a table</h2><button onClick={() => setBookingOpen(false)}><X/></button></div>
@@ -148,7 +165,7 @@ function App() {
           </div>
           <textarea className="mt-4 min-h-28 w-full rounded-xl border border-black/10 bg-white px-4 py-3 outline-none focus:border-forest" placeholder="Any special request?"/>
           <button onClick={() => setBookingOpen(false)} className="mt-4 w-full rounded-full bg-forest py-3.5 font-semibold text-white">Request reservation</button>
-          <p className="mt-3 text-center text-xs text-ink/45">Firebase booking storage will be connected in the next step.</p>
+          <p className="mt-3 text-center text-xs text-ink/45">{user ? "You are signed in. Booking storage will be connected next." : "Please sign in before booking. Booking storage will be connected next."}</p>
         </div>
       </div>}
     </div>
