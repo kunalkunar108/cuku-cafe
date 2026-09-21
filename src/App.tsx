@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useAuth } from "./context/AuthContext";
 import AuthModal from "./components/AuthModal";
+import AdminDashboard from "./components/AdminDashboard";
 import { addDoc, collection, getDocs, query, where, serverTimestamp, updateDoc, doc } from "firebase/firestore";
 import { db } from "./lib/firebase";
 import {
@@ -283,6 +284,10 @@ function App() {
       </>}
 
       <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
+
+      {route === "/admin" && (
+        <AdminDashboard onBackToSite={() => navigate("/")} />
+      )}
 
       {route === "/dashboard" && (
         <div className="min-h-screen bg-[#f6f3ea]">
