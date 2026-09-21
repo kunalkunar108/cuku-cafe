@@ -1,7 +1,7 @@
 import { FormEvent, useState } from "react";
 import { useAuth } from "./context/AuthContext";
 import AuthModal from "./components/AuthModal";
-import { addDoc, collection, getDocs, query, serverTimestamp, updateDoc, doc } from "firebase/firestore";
+import { addDoc, collection, getDocs, query, where, serverTimestamp, updateDoc, doc } from "firebase/firestore";
 import { db } from "./lib/firebase";
 import {
   ArrowRight, CalendarDays, ChevronDown, Coffee, Instagram, MapPin,
@@ -48,11 +48,10 @@ function App() {
     setDashboardError("");
     try {
       const snapshot = await getDocs(
-        query(collection(db, "tableBookings"))
+        query(collection(db, "tableBookings"), where("userId", "==", user.uid))
       );
       const bookings = snapshot.docs
         .map(item => ({ id: item.id, ...item.data() }))
-        .filter((item: any) => item.userId === user.uid)
         .sort((a: any, b: any) => {
           const aTime = a.createdAt?.toMillis?.() || 0;
           const bTime = b.createdAt?.toMillis?.() || 0;
