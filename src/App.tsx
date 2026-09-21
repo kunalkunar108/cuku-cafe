@@ -156,6 +156,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-cream">
+      {route !== "/dashboard" && <>
       <header className="sticky top-0 z-50 border-b border-black/5 bg-cream/95 backdrop-blur">
         <div className="container-page flex h-20 items-center justify-between">
           <a href="#home" className="flex items-center gap-3">
@@ -278,6 +279,8 @@ function App() {
         </div>
         <div className="container-page mt-12 border-t border-white/10 pt-6 text-xs text-white/35">© 2026 Café Bistro. Built for the next phase: Firebase, bookings, auth and admin.</div>
       </footer>
+
+      </>}
 
       <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
 
