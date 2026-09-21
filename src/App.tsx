@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useAuth } from "./context/AuthContext";
 import AuthModal from "./components/AuthModal";
 import { addDoc, collection, getDocs, query, where, serverTimestamp, updateDoc, doc } from "firebase/firestore";
@@ -35,10 +35,29 @@ function App() {
   const [bookingMessage, setBookingMessage] = useState("");
   const [bookingError, setBookingError] = useState("");
   const [dashboardOpen, setDashboardOpen] = useState(false);
+  const [route, setRoute] = useState(() => window.location.pathname);
   const [myBookings, setMyBookings] = useState<any[]>([]);
   const [bookingsLoading, setBookingsLoading] = useState(false);
   const [bookingActionId, setBookingActionId] = useState<string | null>(null);
   const [dashboardError, setDashboardError] = useState("");
+
+  useEffect(() => {
+    const handlePopState = () => setRoute(window.location.pathname);
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  const navigate = (path: string) => {
+    window.history.pushState({}, "", path);
+    setRoute(path);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    if (route === "/dashboard" && user) {
+      void loadMyBookings();
+    }
+  }, [route, user]);
 
   const addToCart = () => setCart(v => v + 1);
 
@@ -71,7 +90,7 @@ function App() {
       setAuthOpen(true);
       return;
     }
-    setDashboardOpen(true);
+    navigate("/dashboard");
     await loadMyBookings();
   };
 
@@ -165,7 +184,11 @@ function App() {
           </button>
           {cart > 0 && <span className="absolute right-16 top-7 grid h-5 min-w-5 place-items-center rounded-full bg-gold px-1 text-xs font-bold md:right-40">{cart}</span>}
         </div>
-        {open && <div className="border-t border-black/5 px-5 py-5 md:hidden">{["Home","Menu","About","Gallery","Events","Contact"].map(x => <a onClick={() => setOpen(false)} key={x} href={"#" + x.toLowerCase()} className="block py-3 text-lg">{x}</a>)}<button onClick={() => {setOpen(false);setAuthOpen(true)}} className="mt-3 w-full rounded-full border border-forest/20 bg-white py-3 font-semibold text-forest">Login / Sign up</button><button onClick={() => {setOpen(false);setBookingOpen(true)}} className="mt-3 w-full rounded-full bg-forest py-3 font-semibold text-white">Book a Table</button></div>}
+        {open && <div className="border-t border-black/5 px-5 py-5 md:hidden">
+          {["Home","Menu","About","Gallery","Events","Contact"].map(x => <a onClick={() => setOpen(false)} key={x} href={"#" + x.toLowerCase()} className="block py-3 text-lg">{x}</a>)}
+          {!loading && user ? <button onClick={() => { setOpen(false); void openDashboard(); }} className="mt-3 flex w-full items-center justify-center gap-2 rounded-full border border-forest/20 bg-white py-3 font-semibold text-forest"><UserRound size={17}/> Dashboard</button> : <button onClick={() => {setOpen(false);setAuthOpen(true)}} className="mt-3 w-full rounded-full border border-forest/20 bg-white py-3 font-semibold text-forest">Login / Sign up</button>}
+          <button onClick={() => {setOpen(false);setBookingOpen(true)}} className="mt-3 w-full rounded-full bg-forest py-3 font-semibold text-white">Book a Table</button>
+        </div>}
       </header>
 
       <main id="home">
@@ -258,90 +281,144 @@ function App() {
 
       <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
 
-      {dashboardOpen && user && <div className="fixed inset-0 z-[65] overflow-y-auto bg-cream">
-        <div className="min-h-screen">
-          <header className="sticky top-0 z-10 border-b border-black/5 bg-cream/95 backdrop-blur">
-            <div className="container-page flex h-20 items-center justify-between">
-              <button onClick={() => setDashboardOpen(false)} className="flex items-center gap-3">
-                <span className="grid h-10 w-10 place-items-center rounded-full bg-forest text-cream"><Coffee size={20}/></span>
-                <span className="font-display text-2xl font-bold">Café Bistro</span>
-              </button>
-              <div className="flex items-center gap-3">
-                <span className="hidden text-sm text-ink/55 sm:block">{user.email}</span>
-                <button onClick={() => setDashboardOpen(false)} className="rounded-full border border-black/10 bg-white px-4 py-2 text-sm font-semibold hover:border-forest">Back to site</button>
+      {route === "/dashboard" && (
+        <div className="min-h-screen bg-[#f6f3ea]">
+          <div className="flex min-h-screen">
+            <aside className="sticky top-0 hidden h-screen w-72 shrink-0 flex-col border-r border-black/5 bg-ink text-white lg:flex">
+              <div className="flex h-24 items-center gap-3 border-b border-white/10 px-7">
+                <span className="grid h-11 w-11 place-items-center rounded-full bg-forest text-cream"><Coffee size={21}/></span>
+                <div>
+                  <div className="font-display text-xl font-bold">Café Bistro</div>
+                  <div className="text-[11px] uppercase tracking-[.18em] text-white/40">Guest portal</div>
+                </div>
               </div>
-            </div>
-          </header>
+              <nav className="flex-1 space-y-2 px-4 py-7">
+                <button className="flex w-full items-center gap-3 rounded-2xl bg-white/10 px-4 py-3.5 text-left text-sm font-semibold text-white"><CalendarCheck size={18}/> Dashboard</button>
+                <button onClick={() => { void loadMyBookings(); }} className="flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 text-left text-sm font-semibold text-white/55 hover:bg-white/5 hover:text-white"><CalendarDays size={18}/> My Bookings</button>
+                <button onClick={() => window.scrollTo({ top: 0 })} className="flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 text-left text-sm font-semibold text-white/55 hover:bg-white/5 hover:text-white"><UserRound size={18}/> My Profile</button>
+              </nav>
+              <div className="border-t border-white/10 p-5">
+                <button onClick={() => navigate("/")} className="mb-2 flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold text-white/65 hover:bg-white/5 hover:text-white"><ArrowRight className="rotate-180" size={17}/> Back to site</button>
+                <button onClick={logout} className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold text-white/65 hover:bg-white/5 hover:text-white"><LogOut size={17}/> Logout</button>
+              </div>
+            </aside>
 
-          <main className="container-page py-12">
-            <div className="grid gap-6 lg:grid-cols-[.8fr_1.2fr]">
-              <section className="rounded-[2rem] bg-forest p-8 text-white">
-                <div className="grid h-14 w-14 place-items-center rounded-full bg-white/10">
-                  {user.photoURL ? <img src={user.photoURL} alt="" className="h-14 w-14 rounded-full object-cover"/> : <UserRound size={26}/>}
-                </div>
-                <p className="mt-7 text-xs font-bold uppercase tracking-[.2em] text-sage">My account</p>
-                <h1 className="mt-2 font-display text-4xl">{user.displayName || "Welcome"}</h1>
-                <p className="mt-2 break-all text-white/60">{user.email}</p>
-                <div className="mt-8 border-t border-white/15 pt-6">
-                  <div className="flex items-center justify-between">
-                    <span className="text-white/60">Total reservations</span>
-                    <b className="text-2xl">{myBookings.length}</b>
+            <div className="min-w-0 flex-1">
+              <header className="sticky top-0 z-30 border-b border-black/5 bg-[#f6f3ea]/90 backdrop-blur">
+                <div className="flex h-20 items-center justify-between px-5 sm:px-8 lg:px-10">
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => navigate("/")} className="grid h-10 w-10 place-items-center rounded-full bg-forest text-cream lg:hidden"><Coffee size={19}/></button>
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[.18em] text-forest">Guest dashboard</p>
+                      <h1 className="font-display text-xl font-bold sm:text-2xl">Welcome back, {user?.displayName?.split(" ")[0] || "Guest"}</h1>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => navigate("/")} className="hidden rounded-full border border-black/10 bg-white px-4 py-2.5 text-sm font-semibold hover:border-forest sm:block">Back to site</button>
+                    {user ? <div className="grid h-10 w-10 place-items-center overflow-hidden rounded-full bg-forest text-sm font-bold text-white">{user.photoURL ? <img src={user.photoURL} alt="" className="h-full w-full object-cover"/> : (user.displayName || user.email || "U").charAt(0).toUpperCase()}</div> : null}
                   </div>
                 </div>
-                <button onClick={logout} className="mt-7 flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-forest hover:bg-sage"><LogOut size={16}/> Logout</button>
-              </section>
+              </header>
 
-              <section className="rounded-[2rem] border border-black/5 bg-white p-6 sm:p-8">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-[.2em] text-forest">My bookings</p>
-                    <h2 className="mt-2 font-display text-4xl">Table reservations.</h2>
-                  </div>
-                  <button onClick={loadMyBookings} disabled={bookingsLoading} className="rounded-full border border-black/10 px-4 py-2 text-sm font-semibold hover:border-forest disabled:opacity-50">
-                    {bookingsLoading ? "Refreshing..." : "Refresh"}
-                  </button>
-                </div>
-
-                {dashboardError && <div className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{dashboardError}</div>}
-
-                {bookingsLoading ? (
-                  <div className="grid min-h-64 place-items-center text-ink/45"><Loader2 className="animate-spin" size={28}/></div>
-                ) : myBookings.length === 0 ? (
-                  <div className="mt-8 rounded-3xl bg-cream p-8 text-center">
-                    <CalendarCheck className="mx-auto text-forest" size={38}/>
-                    <h3 className="mt-4 font-display text-2xl">No reservations yet.</h3>
-                    <p className="mt-2 text-sm text-ink/55">Your table reservations will appear here after you submit a request.</p>
-                    <button onClick={() => { setDashboardOpen(false); setBookingOpen(true); }} className="mt-5 rounded-full bg-forest px-5 py-3 text-sm font-semibold text-white">Book a table</button>
-                  </div>
+              <main className="mx-auto max-w-6xl px-5 py-8 sm:px-8 sm:py-10 lg:px-10">
+                {!user ? (
+                  <section className="grid min-h-[60vh] place-items-center">
+                    <div className="max-w-md rounded-[2rem] border border-black/5 bg-white p-8 text-center shadow-sm">
+                      <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-sage text-forest"><UserRound size={25}/></div>
+                      <h2 className="mt-5 font-display text-3xl">Sign in to your dashboard</h2>
+                      <p className="mt-3 text-sm leading-6 text-ink/55">Your bookings and account details are available after you sign in.</p>
+                      <button onClick={() => setAuthOpen(true)} className="mt-6 rounded-full bg-forest px-6 py-3 font-semibold text-white">Login / Sign up</button>
+                    </div>
+                  </section>
                 ) : (
-                  <div className="mt-7 space-y-4">
-                    {myBookings.map((booking: any) => {
-                      const status = String(booking.status || "pending").toLowerCase();
-                      const cancelled = status === "cancelled";
-                      const confirmed = status === "confirmed";
-                      return <article key={booking.id} className="rounded-2xl border border-black/5 bg-cream p-5">
-                        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              {confirmed ? <CircleCheck className="text-green-700" size={19}/> : cancelled ? <CircleX className="text-red-600" size={19}/> : <Clock3 className="text-gold" size={19}/>}
-                              <span className="text-xs font-bold uppercase tracking-wider text-ink/45">Reservation</span>
-                            </div>
-                            <h3 className="mt-2 font-display text-2xl">{booking.date}</h3>
-                            <p className="mt-1 text-sm text-ink/60">{booking.guests} {Number(booking.guests) === 1 ? "guest" : "guests"} · {booking.phone}</p>
-                          </div>
-                          <span className={`rounded-full px-3 py-1.5 text-xs font-bold capitalize ${confirmed ? "bg-green-100 text-green-800" : cancelled ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"}`}>{status}</span>
+                  <>
+                    <div className="mb-8 flex items-end justify-between gap-4">
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-[.2em] text-forest">Overview</p>
+                        <h2 className="mt-2 font-display text-4xl sm:text-5xl">Your Café Bistro account.</h2>
+                      </div>
+                      <button onClick={loadMyBookings} disabled={bookingsLoading} className="hidden rounded-full border border-black/10 bg-white px-4 py-2.5 text-sm font-semibold hover:border-forest disabled:opacity-50 sm:block">{bookingsLoading ? "Refreshing..." : "Refresh"}</button>
+                    </div>
+
+                    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                      <div className="rounded-3xl bg-forest p-6 text-white">
+                        <div className="flex items-center justify-between"><span className="text-sm text-white/60">Total reservations</span><CalendarCheck size={20}/></div>
+                        <div className="mt-8 font-display text-5xl">{myBookings.length}</div>
+                        <p className="mt-2 text-sm text-white/55">All table requests on this account</p>
+                      </div>
+                      <div className="rounded-3xl border border-black/5 bg-white p-6">
+                        <div className="flex items-center justify-between"><span className="text-sm text-ink/55">Pending</span><Clock3 className="text-gold" size={20}/></div>
+                        <div className="mt-8 font-display text-5xl">{myBookings.filter((b: any) => String(b.status || "pending").toLowerCase() === "pending").length}</div>
+                        <p className="mt-2 text-sm text-ink/45">Awaiting confirmation</p>
+                      </div>
+                      <div className="rounded-3xl border border-black/5 bg-white p-6 sm:col-span-2 xl:col-span-1">
+                        <div className="flex items-center justify-between"><span className="text-sm text-ink/55">Account</span><UserRound className="text-forest" size={20}/></div>
+                        <div className="mt-6 truncate font-semibold">{user.email}</div>
+                        <p className="mt-2 text-sm text-ink/45">Signed in securely with Firebase</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-8 rounded-[2rem] border border-black/5 bg-white p-6 sm:p-8">
+                      <div className="flex items-start justify-between gap-4">
+                        <div><p className="text-xs font-bold uppercase tracking-[.2em] text-forest">Reservations</p><h2 className="mt-2 font-display text-3xl sm:text-4xl">My bookings</h2></div>
+                        <button onClick={loadMyBookings} disabled={bookingsLoading} className="rounded-full border border-black/10 px-4 py-2 text-sm font-semibold hover:border-forest disabled:opacity-50 sm:hidden">{bookingsLoading ? "..." : "Refresh"}</button>
+                      </div>
+                      {dashboardError && <div className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{dashboardError}</div>}
+                      {bookingsLoading ? (
+                        <div className="grid min-h-56 place-items-center text-ink/40"><Loader2 className="animate-spin" size={28}/></div>
+                      ) : myBookings.length === 0 ? (
+                        <div className="mt-7 rounded-3xl bg-[#f6f3ea] p-8 text-center">
+                          <CalendarCheck className="mx-auto text-forest" size={38}/>
+                          <h3 className="mt-4 font-display text-2xl">No reservations yet.</h3>
+                          <p className="mt-2 text-sm text-ink/55">Your table reservations will appear here after you submit a request.</p>
+                          <button onClick={() => { navigate("/"); setBookingOpen(true); }} className="mt-5 rounded-full bg-forest px-5 py-3 text-sm font-semibold text-white">Book a table</button>
                         </div>
-                        {booking.specialRequest && <p className="mt-4 rounded-xl bg-white px-4 py-3 text-sm text-ink/60"><b>Request:</b> {booking.specialRequest}</p>}
-                        {!cancelled && <button onClick={() => cancelBooking(booking.id)} disabled={bookingActionId === booking.id} className="mt-4 rounded-full border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50">{bookingActionId === booking.id ? "Cancelling..." : "Cancel reservation"}</button>}
-                      </article>;
-                    })}
-                  </div>
+                      ) : (
+                        <div className="mt-7 space-y-4">
+                          {myBookings.map((booking: any) => {
+                            const status = String(booking.status || "pending").toLowerCase();
+                            const cancelled = status === "cancelled";
+                            const confirmed = status === "confirmed";
+                            return <article key={booking.id} className="rounded-2xl border border-black/5 bg-[#f6f3ea] p-5">
+                              <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+                                <div>
+                                  <div className="flex items-center gap-2">{confirmed ? <CircleCheck className="text-green-700" size={19}/> : cancelled ? <CircleX className="text-red-600" size={19}/> : <Clock3 className="text-gold" size={19}/>}<span className="text-xs font-bold uppercase tracking-wider text-ink/45">Table reservation</span></div>
+                                  <h3 className="mt-2 font-display text-2xl">{booking.date}</h3>
+                                  <p className="mt-1 text-sm text-ink/60">{booking.guests} {Number(booking.guests) === 1 ? "guest" : "guests"} · {booking.phone}</p>
+                                </div>
+                                <span className={`rounded-full px-3 py-1.5 text-xs font-bold capitalize ${confirmed ? "bg-green-100 text-green-800" : cancelled ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"}`}>{status}</span>
+                              </div>
+                              {booking.specialRequest && <p className="mt-4 rounded-xl bg-white px-4 py-3 text-sm text-ink/60"><b>Request:</b> {booking.specialRequest}</p>}
+                              {!cancelled && <button onClick={() => cancelBooking(booking.id)} disabled={bookingActionId === booking.id} className="mt-4 rounded-full border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50">{bookingActionId === booking.id ? "Cancelling..." : "Cancel reservation"}</button>}
+                            </article>;
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="mt-8 grid gap-4 lg:grid-cols-[1.3fr_.7fr]">
+                      <section className="rounded-[2rem] border border-black/5 bg-white p-6 sm:p-8">
+                        <p className="text-xs font-bold uppercase tracking-[.2em] text-forest">Profile</p>
+                        <h2 className="mt-2 font-display text-3xl">Account details</h2>
+                        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                          <div className="rounded-2xl bg-[#f6f3ea] p-4"><span className="text-xs uppercase tracking-wider text-ink/40">Name</span><p className="mt-2 font-semibold">{user.displayName || "Not set"}</p></div>
+                          <div className="rounded-2xl bg-[#f6f3ea] p-4"><span className="text-xs uppercase tracking-wider text-ink/40">Email</span><p className="mt-2 truncate font-semibold">{user.email}</p></div>
+                        </div>
+                      </section>
+                      <section className="rounded-[2rem] bg-sage p-6 sm:p-8">
+                        <p className="text-xs font-bold uppercase tracking-[.2em] text-forest">Need something?</p>
+                        <h2 className="mt-2 font-display text-3xl">Plan your next visit.</h2>
+                        <p className="mt-3 text-sm leading-6 text-ink/60">Reserve a table or return to the café to explore the menu and events.</p>
+                        <button onClick={() => { navigate("/"); setBookingOpen(true); }} className="mt-6 rounded-full bg-forest px-5 py-3 text-sm font-semibold text-white">Book a table</button>
+                      </section>
+                    </div>
+                  </>
                 )}
-              </section>
+              </main>
             </div>
-          </main>
+          </div>
         </div>
-      </div>
+      )}
 
       {bookingOpen && <div className="fixed inset-0 z-[60] grid place-items-center bg-black/50 p-4" onClick={() => setBookingOpen(false)}>
         <div className="w-full max-w-lg rounded-3xl bg-cream p-7 shadow-2xl" onClick={e => e.stopPropagation()}>
