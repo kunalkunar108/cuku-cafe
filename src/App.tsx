@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { FormEvent, useState } from "react";
 import { useAuth } from "./context/AuthContext";
 import AuthModal from "./components/AuthModal";
+import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { db } from "./lib/firebase";
 import {
   ArrowRight, CalendarDays, ChevronDown, Coffee, Instagram, MapPin,
   Menu as MenuIcon, ShoppingBag, Star, Utensils, X
@@ -28,8 +30,52 @@ function App() {
   const [bookingOpen, setBookingOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const { user, loading, logout } = useAuth();
+  const [bookingForm, setBookingForm] = useState({ name: "", phone: "", date: "", guests: "2", specialRequest: "" });
+  const [bookingSaving, setBookingSaving] = useState(false);
+  const [bookingMessage, setBookingMessage] = useState("");
+  const [bookingError, setBookingError] = useState("");
 
   const addToCart = () => setCart(v => v + 1);
+
+  const submitBooking = async (event: FormEvent) => {
+    event.preventDefault();
+    setBookingMessage("");
+    setBookingError("");
+
+    if (!user) {
+      setBookingError("Please login or sign up before requesting a reservation.");
+      setAuthOpen(true);
+      return;
+    }
+
+    if (!bookingForm.name.trim() || !bookingForm.phone.trim() || !bookingForm.date) {
+      setBookingError("Please enter your name, phone number and preferred date.");
+      return;
+    }
+
+    setBookingSaving(true);
+    try {
+      await addDoc(collection(db, "tableBookings"), {
+        userId: user.uid,
+        name: bookingForm.name.trim(),
+        phone: bookingForm.phone.trim(),
+        date: bookingForm.date,
+        guests: Number(bookingForm.guests),
+        specialRequest: bookingForm.specialRequest.trim(),
+        status: "pending",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      setBookingForm({ name: user.displayName || "", phone: "", date: "", guests: "2", specialRequest: "" });
+      setBookingMessage("Reservation request submitted successfully.");
+    } catch (error) {
+      console.error("Table booking failed:", error);
+      setBookingError("We couldn't save your reservation. Please try again.");
+    } finally {
+      setBookingSaving(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-cream">
@@ -156,16 +202,23 @@ function App() {
 
       {bookingOpen && <div className="fixed inset-0 z-[60] grid place-items-center bg-black/50 p-4" onClick={() => setBookingOpen(false)}>
         <div className="w-full max-w-lg rounded-3xl bg-cream p-7 shadow-2xl" onClick={e => e.stopPropagation()}>
-          <div className="flex items-center justify-between"><h2 className="font-display text-3xl">Book a table</h2><button onClick={() => setBookingOpen(false)}><X/></button></div>
-          <div className="mt-6 grid gap-4 sm:grid-cols-2">
-            <input className="rounded-xl border border-black/10 bg-white px-4 py-3 outline-none focus:border-forest" placeholder="Your name"/>
-            <input className="rounded-xl border border-black/10 bg-white px-4 py-3 outline-none focus:border-forest" placeholder="Phone number"/>
-            <input type="date" className="rounded-xl border border-black/10 bg-white px-4 py-3 outline-none focus:border-forest"/>
-            <select className="rounded-xl border border-black/10 bg-white px-4 py-3 outline-none focus:border-forest"><option>2 guests</option><option>3 guests</option><option>4 guests</option><option>5+ guests</option></select>
-          </div>
-          <textarea className="mt-4 min-h-28 w-full rounded-xl border border-black/10 bg-white px-4 py-3 outline-none focus:border-forest" placeholder="Any special request?"/>
-          <button onClick={() => setBookingOpen(false)} className="mt-4 w-full rounded-full bg-forest py-3.5 font-semibold text-white">Request reservation</button>
-          <p className="mt-3 text-center text-xs text-ink/45">{user ? "You are signed in. Booking storage will be connected next." : "Please sign in before booking. Booking storage will be connected next."}</p>
+          <div className="flex items-center justify-between"><div><h2 className="font-display text-3xl">Book a table</h2><p className="mt-1 text-sm text-ink/50">Request a reservation in a few seconds.</p></div><button onClick={() => setBookingOpen(false)}><X/></button></div>
+          {!user && <div className="mt-5 rounded-xl border border-forest/15 bg-sage/50 px-4 py-3 text-sm text-ink/70">Please login or sign up before requesting a reservation.</div>}
+          <form onSubmit={submitBooking}>
+            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+              <input value={bookingForm.name} onChange={e => setBookingForm(v => ({...v, name: e.target.value}))} className="rounded-xl border border-black/10 bg-white px-4 py-3 outline-none focus:border-forest" placeholder="Your name" required />
+              <input value={bookingForm.phone} onChange={e => setBookingForm(v => ({...v, phone: e.target.value}))} type="tel" className="rounded-xl border border-black/10 bg-white px-4 py-3 outline-none focus:border-forest" placeholder="Phone number" required />
+              <input value={bookingForm.date} onChange={e => setBookingForm(v => ({...v, date: e.target.value}))} type="date" min={new Date().toISOString().split("T")[0]} className="rounded-xl border border-black/10 bg-white px-4 py-3 outline-none focus:border-forest" required />
+              <select value={bookingForm.guests} onChange={e => setBookingForm(v => ({...v, guests: e.target.value}))} className="rounded-xl border border-black/10 bg-white px-4 py-3 outline-none focus:border-forest">
+                <option value="2">2 guests</option><option value="3">3 guests</option><option value="4">4 guests</option><option value="5">5+ guests</option>
+              </select>
+            </div>
+            <textarea value={bookingForm.specialRequest} onChange={e => setBookingForm(v => ({...v, specialRequest: e.target.value}))} className="mt-4 min-h-28 w-full rounded-xl border border-black/10 bg-white px-4 py-3 outline-none focus:border-forest" placeholder="Any special request?" />
+            {bookingError && <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{bookingError}</div>}
+            {bookingMessage && <div className="mt-4 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">{bookingMessage}</div>}
+            <button type="submit" disabled={bookingSaving} className="mt-4 w-full rounded-full bg-forest py-3.5 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">{bookingSaving ? "Saving reservation..." : "Request reservation"}</button>
+          </form>
+          <p className="mt-3 text-center text-xs text-ink/45">Your request is saved securely to your Firebase account.</p>
         </div>
       </div>}
     </div>
